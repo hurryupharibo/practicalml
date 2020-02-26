@@ -1,0 +1,88 @@
+## install and load libraries
+```{r load-library}
+library(caret)
+library(knitr)
+library(corrplot)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(gbm)
+```
+
+## download data
+```{r download-data}
+train <- read.csv(url("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"))
+test  <- read.csv(url("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"))
+```
+
+## create partition with the training data set
+```{r create-partition}
+train_partition  <- createDataPartition(train$classe, p=0.7, list=FALSE)
+train_set <- train[train_partition, ]
+test_set <- train[-train_partition, ]
+```
+
+## remove variables with nearly zero variance
+```{r remove-var}
+nearly_zero_var <- nearZeroVar(train_set)
+train_set <- train_set[, -nearly_zero_var]
+test_set  <- test_set[, -nearly_zero_var]
+```
+
+## remove variables that are NA
+```{r remove-na}
+na_var <- sapply(train_set, function(x) mean(is.na(x))) > 0.95
+train_set <- train_set[, na_var==FALSE]
+test_set  <- test_set[, na_var==FALSE]
+```
+
+## remove columns 1 to 5 i.e. identification only variables
+```{r remove-col}
+train_set <- train_set[, -(1:5)]
+test_set  <- test_set[, -(1:5)]
+```
+
+## dim training and test set
+```{r dim-data}
+dim(train_set)
+dim(test_set)
+```
+
+## prediction using random forest. note: this project will omit using decision tree due to its lower accuracy.
+```{r randomforest}
+set.seed(343)
+control_rf <- trainControl(method="cv", number=3, verboseIter=FALSE)
+rf_model <- train(classe ~ ., data=train_set, method="rf", trControl=control_rf)
+rf_model$finalModel
+```
+
+## assess accuracy of random forest model
+```{r rf_accuracy}
+rf_predict <- predict(rf_model,newdata = test_set )
+rf <- confusionMatrix(test_set$classe,rf_predict)
+rf
+```
+
+## prediction using generalised boosted model (GBM)
+```{r gbm}
+set.seed(222)
+control_gbm <- trainControl(method = "repeatedcv", number = 5, repeats = 1)
+gbm_model  <- train(classe ~ ., data=train_set, method = "gbm",
+                    trControl = control_gbm, verbose = FALSE)
+gbm_model$finalModel
+```
+
+## assess accuracy of gbm model
+```{r gbm_accuracy}
+gbm_predict <- predict(gbm_model, newdata=test_set)
+gbm <- confusionMatrix(gbm_predict, test_set$classe)
+gbm
+```
+
+## The random forest model is more accurate at ~99% than the GBM model ~98%. Hence, prediction using the random forest model will be used for validation i.e. the predicted results were used to predict the answer for each case.
+```{r predict}
+predict_quiz <- predict(rf_model,newdata=test)
+predict_quiz
+```
+
+# the random forest model managed to predict the answer to each question in the quiz with 100% accuracy.
